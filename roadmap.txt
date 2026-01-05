@@ -1,0 +1,295 @@
+1) What you’re building (1-sentence + 3 core features)
+
+One sentence: A system that continuously ingests market + macro/company events, computes “what changed,” and pushes alerts + a dashboard that explains why something moved.
+
+Core features
+
+Ingestion: scheduled + streaming collectors (prices, macro calendar, news/events).
+
+Analytics: compute indicators + “deltas” (how today differs from baseline).
+
+Delivery: alerts (email/Slack/webhooks) + dashboard (filters, drilldowns, history).
+
+This maps well to common SWE/DE/BI requirements:
+
+REST APIs, data modeling, ETL/ELT, scheduling, caching
+
+streaming/events (Kafka/Rabbit), observability/logging, testing
+
+analytics metrics, dashboards, “business storytelling”
+
+2) High-level architecture (simple, resume-friendly)
+
+Services (start as a modular monolith, split later if you want “microservices”)
+
+Ingest Service (Spring Boot)
+
+pulls data on schedules (minute/hour/day)
+
+writes raw data to DB + emits “new data” events
+
+Analytics Service (Spring Boot)
+
+listens for new data events
+
+computes indicators + anomaly rules
+
+writes results to DB + emits “alert candidate” events
+
+Alerts Service (Spring Boot)
+
+applies alert rules + user preferences
+
+sends notifications
+
+stores alert history (auditable)
+
+Dashboard (React OR simple server-rendered UI)
+
+charts, tables, filters, “why this fired” explanation
+
+Data layer
+
+Postgres as your source of truth
+
+Redis for caching (latest values, computed metrics, rate limiting, job locks)
+
+Optional: Kafka (or RabbitMQ) for event-driven processing (adds “real” DE flavor)
+
+Observability
+
+Spring Actuator + Prometheus/Grafana (or just Actuator + logs initially)
+
+Structured logs + correlation IDs
+
+3) Data sources (practical options)
+
+Start with one reliable price source + one events source:
+
+Prices: stooq (free), Alpha Vantage (easy), Polygon/IEX (paid), Yahoo via community libs (riskier)
+
+Macro events: FRED for time series; economic calendar depends on provider
+
+News/events: start simple (RSS or a news API), then add NLP later
+
+Key idea: you don’t need perfect data to impress. You need a clean pipeline + explainable metrics + good product behavior.
+
+4) Technical roadmap (phased, so you actually finish)
+Phase 0 — Define the “MVP contract” (1–2 hours)
+
+Write this down in your README before coding:
+
+What assets/entities? (ex: SPY, AAPL, BTC, 10Y yield)
+
+Update frequency? (daily close is easiest)
+
+What alerts exist? (ex: “Volatility spike”, “MA crossover”, “Unusual drawdown”, “Macro surprise”)
+
+What dashboard pages? (ex: Overview, Asset detail, Alerts history, Event timeline)
+
+If you can define this, the project becomes buildable.
+
+Phase 1 — MVP ingestion + storage (you can demo this fast)
+
+Goal: “I can ingest daily data and query it via API.”
+
+Build
+
+Spring Boot app + Postgres
+
+Tables: asset, price_bar, ingestion_run
+
+Scheduled job: fetch prices → upsert to price_bar
+
+REST endpoints:
+
+GET /assets
+
+GET /assets/{id}/prices?from=&to=
+
+Deliverable: Postman/Swagger shows real stored time series.
+
+Phase 2 — Analytics engine (make it “not just a predictor”)
+
+Goal: compute standard metrics + deltas.
+
+Compute
+
+returns: r_t = (P_t / P_{t-1}) - 1
+
+rolling volatility (std dev of returns over N days)
+
+moving averages (SMA/EMA)
+
+drawdown from peak
+
+“macro delta” idea: difference vs baseline (ex: 10Y yield change over 5 days)
+
+Store
+
+table: metric_value(asset_id, metric_type, ts, value)
+
+or separate tables if you prefer strict schema
+
+Endpoints
+
+GET /assets/{id}/metrics?types=VOL_20,SMA_50
+
+Deliverable: charts can be drawn from your API.
+
+Phase 3 — Alerts (this is what recruiters remember)
+
+Goal: turn analytics into real product behavior.
+
+Alert rules (examples)
+
+Volatility spike: VOL_20 > (median VOL_20 last 180d) * 1.8
+
+Drawdown: drawdown < -10%
+
+MA crossover: SMA_20 crosses SMA_50
+
+Macro shock: 10Y yield changes > X bps in Y days
+
+Flow
+
+analytics job computes → evaluates rules → writes alert_event
+
+alert service sends notification + stores in alert_history
+
+Add
+
+user preferences: user, watchlist, alert_rule, delivery_channel
+
+Deliverable: alerts feed + “why it fired” explanation.
+
+Phase 4 — Dashboard (BI polish)
+
+Goal: a clean UI that shows insight, not raw tables.
+
+Pages
+
+Overview: top movers + latest alerts + “macro summary”
+
+Asset detail: price + overlays (MA/vol) + event markers
+
+Alerts history: filters, ack status, severity
+
+Rule tuning: thresholds (nice-to-have)
+
+BI angle: add breakdowns like:
+
+alerts by type
+
+alerts by asset sector/category
+
+false-positive rate (ack vs ignored)
+
+Phase 5 — “Enterprise requirements” (the stuff job postings love)
+
+Pick 4–6 of these and implement them cleanly:
+
+Docker Compose for local stack (app + postgres + redis)
+
+CI pipeline (GitHub Actions: tests + build + docker)
+
+Caching (Redis): “latest metrics” endpoint is fast
+
+Rate limiting + API keys
+
+Pagination/filtering/sorting for list endpoints
+
+Idempotent ingestion (no duplicates)
+
+Retries + dead-letter queue if using Kafka/Rabbit
+
+Monitoring: Actuator + health checks + metrics
+
+5) How to get started (the exact first steps)
+Day 1: Project skeleton + infrastructure
+
+Create repo with:
+
+services/market-sentinel/ (Spring Boot)
+
+docker-compose.yml (Postgres + Redis)
+
+Spring Boot dependencies:
+
+Spring Web, Spring Data JPA, Validation
+
+Flyway (migrations)
+
+Actuator
+
+Define DB schema (Flyway):
+
+asset(id, symbol, name, type)
+
+price_bar(asset_id, ts, open, high, low, close, volume)
+
+unique constraint (asset_id, ts)
+
+Day 2: Ingestion job
+
+Implement a PriceClient that pulls daily bars
+
+@Scheduled job runs 1x/day (or manual trigger endpoint for testing)
+
+Persist with upsert semantics (idempotent)
+
+Day 3: Read APIs + Swagger
+
+GET /assets
+
+GET /assets/{id}/prices
+
+Add OpenAPI/Swagger UI for recruiter-friendly demo
+
+Day 4–5: Analytics MVP
+
+Compute returns + SMA_20 + VOL_20
+
+Save to metric_value
+
+Endpoint: GET /assets/{id}/metrics
+
+After that, you’re already demo-ready and can iterate.
+
+6) “Technical overview” you can put in the README (structure)
+
+Use this exact outline:
+
+Problem (what pain point)
+
+Architecture (diagram + services)
+
+Data model (ERD screenshot)
+
+Pipelines (ingestion → analytics → alerts)
+
+APIs (key endpoints)
+
+Deployment (docker compose)
+
+Testing (unit + integration)
+
+Future work (Kafka, NLP events, anomaly models)
+
+7) Quick “requirement mapping” (so it matches postings)
+
+If a job says:
+
+Spring Boot + REST → your API layer + Swagger
+
+SQL + data modeling → Postgres schema + migrations + indexes
+
+ETL/ELT → ingestion + transformations + metric tables
+
+Streaming/events → Kafka/Rabbit + event consumers
+
+Caching/performance → Redis + caching strategy
+
+Monitoring → Actuator + metrics
+
+Cloud → deploy to Render/Fly.io/AWS later (optional)

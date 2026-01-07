@@ -16,6 +16,12 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+market:
+  scheduler:
+    enabled: true
+    cron: "0 * * * * MON-FRI" # 6:10 PM weekdays 0 10 18 * * MON-FRI
+  alphavantage:
+    apiKey: ${ALPHAVANTAGE_API_KEY:}
 
 management:
   endpoints:

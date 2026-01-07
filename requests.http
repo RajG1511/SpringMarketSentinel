@@ -1,0 +1,27 @@
+### 0) Health check
+GET http://localhost:8080/actuator/health
+
+### 1) Create asset (SPY)
+POST http://localhost:8080/api/v1/assets
+Content-Type: application/json
+
+{
+  "symbol": "SPY",
+  "name": "SPDR S&P 500 ETF Trust",
+  "assetType": "ETF"
+}
+
+### 2) List assets (copy the id)
+GET http://localhost:8080/api/v1/assets
+
+### 3) Ingest daily prices for asset id=1 (change id if needed)
+POST http://localhost:8080/api/v1/assets/1/prices/ingest
+
+### 4) Fetch all prices
+GET http://localhost:8080/api/v1/assets/1/prices
+
+### 5) Fetch a date range (optional)
+GET http://localhost:8080/api/v1/assets/1/prices?from=2024-01-01&to=2024-12-31
+
+###
+GET http://localhost:8080/api/v1/assets/1/prices/latest

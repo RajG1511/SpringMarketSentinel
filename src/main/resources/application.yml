@@ -19,7 +19,7 @@ spring:
 market:
   scheduler:
     enabled: true
-    cron: "0 * * * * MON-FRI" # 6:10 PM weekdays 0 10 18 * * MON-FRI
+    cron: "0 10 18 * * MON-FRI" # 6:10 PM weekdays
   alphavantage:
     apiKey: ${ALPHAVANTAGE_API_KEY:}
 

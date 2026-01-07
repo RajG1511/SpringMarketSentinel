@@ -25,3 +25,11 @@ GET http://localhost:8080/api/v1/assets/1/prices?from=2024-01-01&to=2024-12-31
 
 ###
 GET http://localhost:8080/api/v1/assets/1/prices/latest
+
+###
+POST http://localhost:8080/api/v1/assets/1/metrics/compute
+
+###
+GET http://localhost:8080/api/v1/assets/1/metrics?types=RETURN_1D,SMA_20,VOL_20
+
+

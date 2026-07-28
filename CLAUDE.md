@@ -70,4 +70,8 @@ Controllers are thin and split by domain under `/api/v1/assets/{assetId}/...` (a
 
 `application.yml` holds the knobs: `market.prices.provider`, `market.metrics.lookbackDays`, `market.scheduler.{enabled,cron}`, and `market.alphavantage.apiKey` (from `ALPHAVANTAGE_API_KEY`). Set `market.scheduler.enabled: false` to disable the cron job (guarded by `@ConditionalOnProperty`).
 
-Alert delivery is env-driven and each channel self-disables when unset: `ALERTS_WEBHOOK_URL` for the webhook, and `MAIL_HOST`/`MAIL_USERNAME`/`MAIL_PASSWORD` + `ALERTS_EMAIL_TO` for email (full table in `EMAIL_SETUP.md`). Redis is defined in `docker-compose.yml` but not yet wired into the app — caching is planned, not implemented.
+Alert delivery is env-driven and each channel self-disables when unset: `ALERTS_WEBHOOK_URL` for the webhook, and `MAIL_HOST`/`MAIL_USERNAME`/`MAIL_PASSWORD` + `ALERTS_EMAIL_TO` for email (full table in `EMAIL_SETUP.md`).
+
+**Caching:** `GET /assets/{id}/metrics/latest` is Redis-cached via `@Cacheable` (`CacheConfig`, cache name `latestMetrics`, key = assetId, TTL `market.cache.ttlSeconds` default 300s) and evicted by `@CacheEvict` whenever `computeMetricsForAsset` runs. Cache values are JSON (Jackson with default typing so DTO records round-trip). Redis connects lazily via `spring.data.redis.host/port` (`REDIS_HOST`/`REDIS_PORT`), so the app still boots and reads fall through to the DB when Redis is down.
+
+The cache manager is built on a `RedisCacheWriter` configured with `immediateWrites()`. This is deliberate: with Lettuce, Spring Data Redis 4.0 defaults cache writes to fire-and-forget, so `put` returns before Redis applies the SET and a read right after a miss can miss again (and write failures are swallowed). `MetricsCacheIntegrationTest.cacheWritesAreVisibleImmediately` guards this — without it that test fails and `secondReadIsServedFromCache` goes flaky.

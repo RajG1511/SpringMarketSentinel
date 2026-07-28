@@ -3,8 +3,11 @@ package com.raj.springmarketanalysis.metric;
 import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
+import com.raj.springmarketanalysis.config.CacheConfig;
 import com.raj.springmarketanalysis.price.PriceBar;
 import com.raj.springmarketanalysis.price.PriceBarRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,7 +16,10 @@ import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Stream;
 
 @Service
 public class MetricsService {
@@ -33,6 +39,7 @@ public class MetricsService {
         this.metricRepo = metricRepo;
     }
 
+    @CacheEvict(cacheNames = CacheConfig.LATEST_METRICS, key = "#assetId")
     @Transactional
     public MetricsRunResult computeMetricsForAsset(Long assetId, int lookbackDays) {
 
@@ -145,5 +152,40 @@ public class MetricsService {
         return guess;
     }
 
+    /**
+     * Latest value of each metric type for an asset. Cached in Redis and evicted
+     * whenever metrics are recomputed for that asset (see computeMetricsForAsset).
+     */
+    @Cacheable(cacheNames = CacheConfig.LATEST_METRICS, key = "#assetId")
+    @Transactional(readOnly = true)
+    public LatestMetrics getLatestMetrics(Long assetId) {
+        Asset asset = assetRepo.findById(assetId)
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
+
+        Optional<MetricValue> r = metricRepo.findTopByAssetIdAndMetricTypeOrderByTsDesc(assetId, MetricType.RETURN_1D);
+        Optional<MetricValue> s20 = metricRepo.findTopByAssetIdAndMetricTypeOrderByTsDesc(assetId, MetricType.SMA_20);
+        Optional<MetricValue> s50 = metricRepo.findTopByAssetIdAndMetricTypeOrderByTsDesc(assetId, MetricType.SMA_50);
+        Optional<MetricValue> v20 = metricRepo.findTopByAssetIdAndMetricTypeOrderByTsDesc(assetId, MetricType.VOL_20);
+
+        LocalDate asOf = Stream.of(r, s20, s50, v20)
+                .filter(Optional::isPresent).map(Optional::get)
+                .map(MetricValue::getTs)
+                .max(Comparator.naturalOrder())
+                .orElse(null);
+
+        return new LatestMetrics(
+                assetId, asset.getSymbol(), asOf,
+                r.map(MetricValue::getValue).orElse(null),
+                s20.map(MetricValue::getValue).orElse(null),
+                s50.map(MetricValue::getValue).orElse(null),
+                v20.map(MetricValue::getValue).orElse(null)
+        );
+    }
+
     public record MetricsRunResult(Long assetId, String symbol, int inserted, String status) {}
+
+    public record LatestMetrics(
+            Long assetId, String symbol, LocalDate asOf,
+            BigDecimal return1d, BigDecimal sma20, BigDecimal sma50, BigDecimal vol20
+    ) {}
 }

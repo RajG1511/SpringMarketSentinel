@@ -4,10 +4,13 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 public interface MetricValueRepository extends JpaRepository<MetricValue, Long> {
 
     boolean existsByAssetIdAndTsAndMetricType(Long assetId, LocalDate ts, MetricType metricType);
+
+    Optional<MetricValue> findTopByAssetIdAndMetricTypeOrderByTsDesc(Long assetId, MetricType metricType);
 
     List<MetricValue> findByAssetIdAndMetricTypeOrderByTsAsc(Long assetId, MetricType metricType);
 

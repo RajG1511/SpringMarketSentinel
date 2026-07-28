@@ -16,6 +16,10 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   # SMTP for alert emails. Leave MAIL_HOST unset to disable email delivery entirely
   # (the app still runs; alerts just won't be emailed). See EMAIL_SETUP.md.
   mail:

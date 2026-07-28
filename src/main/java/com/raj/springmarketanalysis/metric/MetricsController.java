@@ -29,6 +29,12 @@ public class MetricsController {
     }
 
 
+    // Latest value of each metric type (Redis-cached)
+    @GetMapping("/{assetId}/metrics/latest")
+    public MetricsService.LatestMetrics latest(@PathVariable Long assetId) {
+        return metricsService.getLatestMetrics(assetId);
+    }
+
     // Read API
     @GetMapping("/{assetId}/metrics")
     public List<MetricResponse> metrics(

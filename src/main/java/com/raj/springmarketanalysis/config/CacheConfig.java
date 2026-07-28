@@ -6,7 +6,10 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.raj.springmarketanalysis.metric.MetricsService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.interceptor.CacheErrorHandler;
+import org.springframework.cache.interceptor.LoggingCacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
@@ -32,9 +35,24 @@ import java.time.Duration;
  */
 @Configuration
 @EnableCaching
-public class CacheConfig {
+public class CacheConfig implements CachingConfigurer {
 
     public static final String LATEST_METRICS = "latestMetrics";
+
+    /**
+     * Spring's default error handler rethrows, so an unreachable Redis turns a cached
+     * read into a 500 even though the database could have answered it. Logging instead
+     * of rethrowing makes the cache strictly an optimisation: reads fall through to the
+     * database and writes are dropped while Redis is down.
+     * <p>
+     * The trade-off is on eviction — a dropped evict leaves a stale entry that only the
+     * TTL will clear, so a recompute during a Redis outage may not be visible for up to
+     * {@code market.cache.ttlSeconds}.
+     */
+    @Override
+    public CacheErrorHandler errorHandler() {
+        return new LoggingCacheErrorHandler();
+    }
 
     @Bean
     public RedisCacheManager cacheManager(

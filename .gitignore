@@ -1,5 +1,9 @@
 HELP.md
 target/
+
+### Local secrets (API keys, SMTP credentials) — never commit
+.env
+.env.*
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

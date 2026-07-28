@@ -1,5 +1,6 @@
 package com.raj.springmarketanalysis.metric;
 
+import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
 import com.raj.springmarketanalysis.price.PriceBar;
@@ -37,7 +38,7 @@ public class MetricsService {
         LocalDate from = LocalDate.now().minusDays(lookbackDays);
 
         Asset asset = assetRepo.findById(assetId)
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
         List<PriceBar> bars = priceRepo.findByAssetIdAndTsGreaterThanEqualOrderByTsAsc(assetId, from);
         if (bars.size() < 2) {

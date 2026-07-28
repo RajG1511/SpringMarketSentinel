@@ -1,5 +1,6 @@
 package com.raj.springmarketanalysis.price;
 
+import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
 import org.springframework.web.bind.annotation.*;
@@ -27,7 +28,7 @@ public class PriceBarController {
             @RequestParam(required = false) LocalDate to
     ) {
         Asset asset = assetRepo.findById(assetId)
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
         List<PriceBar> bars;
         if (from != null && to != null) {
@@ -50,7 +51,7 @@ public class PriceBarController {
     @GetMapping("/{assetId}/prices/latest")
     public PriceBarResponse latest(@PathVariable Long assetId) {
         Asset asset = assetRepo.findById(assetId)
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
         PriceBar bar = priceRepo.findTopByAssetIdOrderByTsDesc(asset.getId())
                 .orElseThrow(() -> new IllegalStateException("No prices found for asset: " + assetId));

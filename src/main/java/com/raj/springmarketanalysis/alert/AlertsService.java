@@ -1,5 +1,6 @@
 package com.raj.springmarketanalysis.alert;
 
+import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
 import com.raj.springmarketanalysis.metric.MetricType;
@@ -45,7 +46,7 @@ public class AlertsService {
     @Transactional
     public AlertRunResult evaluateAlertsForAsset(Long assetId) {
         Asset asset = assetRepo.findById(assetId)
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
         // Find "latest date" using price bars (anchor)
         PriceBar latestBar = priceRepo.findTopByAssetIdOrderByTsDesc(assetId)

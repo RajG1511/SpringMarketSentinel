@@ -1,5 +1,6 @@
 package com.raj.springmarketanalysis.service;
 
+import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
 import com.raj.springmarketanalysis.ingestion.IngestionRun;
@@ -38,7 +39,7 @@ public class PriceIngestionService {
     @Transactional
     public IngestionResult ingestDailyPrices(Long assetId) {
         Asset asset = assetRepo.findById(assetId)
-                .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
+                .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
         String symbol = asset.getSymbol();
 

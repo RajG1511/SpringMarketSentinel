@@ -21,9 +21,13 @@ public class MetricsController {
 
     // Manual trigger (like ingestion) for testing
     @PostMapping("/{assetId}/metrics/compute")
-    public MetricsService.MetricsRunResult compute(@PathVariable Long assetId) {
-        return metricsService.computeMetricsForAsset(assetId);
+    public MetricsService.MetricsRunResult compute(
+            @PathVariable Long assetId,
+            @RequestParam(defaultValue = "400") int lookbackDays
+    ) {
+        return metricsService.computeMetricsForAsset(assetId, lookbackDays);
     }
+
 
     // Read API
     @GetMapping("/{assetId}/metrics")

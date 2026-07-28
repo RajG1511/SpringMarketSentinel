@@ -32,11 +32,14 @@ public class MetricsService {
     }
 
     @Transactional
-    public MetricsRunResult computeMetricsForAsset(Long assetId) {
+    public MetricsRunResult computeMetricsForAsset(Long assetId, int lookbackDays) {
+
+        LocalDate from = LocalDate.now().minusDays(lookbackDays);
+
         Asset asset = assetRepo.findById(assetId)
                 .orElseThrow(() -> new IllegalArgumentException("Asset not found: " + assetId));
 
-        List<PriceBar> bars = priceRepo.findByAssetIdOrderByTsAsc(assetId);
+        List<PriceBar> bars = priceRepo.findByAssetIdAndTsGreaterThanEqualOrderByTsAsc(assetId, from);
         if (bars.size() < 2) {
             return new MetricsRunResult(assetId, asset.getSymbol(), 0, "Not enough data to compute metrics");
         }
@@ -56,6 +59,9 @@ public class MetricsService {
             BigDecimal curr = closes.get(i);
 
             // (curr / prev) - 1
+            if (prev.signum() == 0) {
+                continue; // or set return to null and skip
+            }
             BigDecimal r = curr.divide(prev, MC).subtract(BigDecimal.ONE, MC);
             returns.add(r);
 

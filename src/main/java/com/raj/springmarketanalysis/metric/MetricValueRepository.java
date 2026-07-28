@@ -14,4 +14,11 @@ public interface MetricValueRepository extends JpaRepository<MetricValue, Long> 
     List<MetricValue> findByAssetIdAndMetricTypeAndTsBetweenOrderByTsAsc(
             Long assetId, MetricType metricType, LocalDate from, LocalDate to
     );
+
+    List<MetricValue> findByAssetIdAndMetricTypeAndTsLessThanEqualOrderByTsDesc(
+            Long assetId, MetricType metricType, LocalDate ts
+    );
+
+
+
 }

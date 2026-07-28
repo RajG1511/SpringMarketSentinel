@@ -17,12 +17,22 @@ spring:
   flyway:
     enabled: true
 market:
+  metrics:
+    lookbackDays: 400
+  prices:
+    provider: stooq
   scheduler:
     enabled: true
     cron: "0 10 18 * * MON-FRI" # 6:10 PM weekdays
   alphavantage:
     apiKey: ${ALPHAVANTAGE_API_KEY:}
-
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui
+    operationsSorter: method
+    tagsSorter: alpha
 management:
   endpoints:
     web:

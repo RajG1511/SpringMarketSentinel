@@ -3,9 +3,8 @@ package com.raj.springmarketanalysis.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.databind.jsontype.PolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.raj.springmarketanalysis.metric.MetricsService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +13,7 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.cache.RedisCacheWriter;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 
 import java.time.Duration;
@@ -24,6 +23,12 @@ import java.time.Duration;
  * JSON (not JDK-serialized) so DTO records round-trip and are human-readable in
  * Redis. Redis connections are lazy, so the app still boots when Redis is down —
  * cached reads just fall through to the database until it's reachable.
+ * <p>
+ * Each cache is registered explicitly with a serializer bound to its value type,
+ * so adding a cache means adding a {@code withCacheConfiguration} entry here.
+ * That is intentional: it keeps cached JSON free of embedded type information,
+ * which would otherwise let whoever can write to Redis pick the class the app
+ * instantiates while reading the cache.
  */
 @Configuration
 @EnableCaching
@@ -40,10 +45,11 @@ public class CacheConfig {
                 .entryTtl(Duration.ofSeconds(ttlSeconds))
                 .disableCachingNullValues()
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(
-                        new GenericJackson2JsonRedisSerializer(cacheObjectMapper())));
+                        new Jackson2JsonRedisSerializer<>(cacheObjectMapper(), MetricsService.LatestMetrics.class)));
 
         return RedisCacheManager.builder(cacheWriter(connectionFactory))
-                .cacheDefaults(config)
+                .withCacheConfiguration(LATEST_METRICS, config)
+                .disableCreateOnMissingCache() // an unregistered cache name fails fast instead of falling back to JDK serialization
                 .build();
     }
 
@@ -59,18 +65,18 @@ public class CacheConfig {
     }
 
     /**
-     * Jackson mapper for cache values: Java-time support for LocalDate, and
-     * default typing (including final record types) so values deserialize back
-     * to their concrete class rather than a generic map.
+     * Jackson mapper for cache values: Java-time support so {@code LocalDate}
+     * round-trips as an ISO string.
+     * <p>
+     * Deliberately no polymorphic default typing. The target type is fixed by the
+     * serializer above, so nothing in a cached payload can choose which class gets
+     * instantiated on read — a value forged by anyone able to write to Redis can
+     * only ever deserialize as {@code LatestMetrics}.
      */
     private ObjectMapper cacheObjectMapper() {
-        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
-                .allowIfBaseType(Object.class)
-                .build();
         return JsonMapper.builder()
                 .addModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-                .activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.EVERYTHING)
                 .build();
     }
 }

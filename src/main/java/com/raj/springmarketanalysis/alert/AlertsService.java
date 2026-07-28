@@ -66,6 +66,7 @@ public class AlertsService {
             switch (rule.getRuleKey()) {
                 case "VOL_SPIKE_20" -> fired += evalVolSpike(asset, ts, rule);
                 case "DRAWDOWN_10PCT" -> fired += evalDrawdown(asset, ts, rule);
+                case "MA_CROSSOVER_20_50" -> fired += evalMaCrossover(asset, ts, rule);
                 default -> { /* ignore unknown rules */ }
             }
         }
@@ -139,6 +140,32 @@ public class AlertsService {
         }
 
         return 0;
+    }
+
+    private int evalMaCrossover(Asset asset, LocalDate ts, AlertRule rule) {
+        // Compare the two most recent SMA_20 and SMA_50 values; a sign change in
+        // (SMA_20 - SMA_50) between them is a crossover on the latest day.
+        List<MetricValue> sma20 = metricRepo.findTop2ByAssetIdAndMetricTypeAndTsLessThanEqualOrderByTsDesc(
+                asset.getId(), MetricType.SMA_20, ts);
+        List<MetricValue> sma50 = metricRepo.findTop2ByAssetIdAndMetricTypeAndTsLessThanEqualOrderByTsDesc(
+                asset.getId(), MetricType.SMA_50, ts);
+
+        if (sma20.size() < 2 || sma50.size() < 2) return 0;
+
+        BigDecimal todayDiff = sma20.get(0).getValue().subtract(sma50.get(0).getValue());
+        BigDecimal prevDiff = sma20.get(1).getValue().subtract(sma50.get(1).getValue());
+
+        boolean golden = prevDiff.signum() <= 0 && todayDiff.signum() > 0;
+        boolean death = prevDiff.signum() >= 0 && todayDiff.signum() < 0;
+        if (!golden && !death) return 0;
+
+        String kind = golden ? "golden cross (SMA_20 crossed above SMA_50)"
+                : "death cross (SMA_20 crossed below SMA_50)";
+        String msg = "MA crossover: " + kind
+                + " (SMA_20=" + sma20.get(0).getValue()
+                + ", SMA_50=" + sma50.get(0).getValue() + ")";
+
+        return createAlertIfMissing(asset, rule, ts, AlertSeverity.WARN, msg);
     }
 
     private int createAlertIfMissing(Asset asset, AlertRule rule, LocalDate ts, AlertSeverity severity, String message) {

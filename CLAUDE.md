@@ -41,8 +41,8 @@ The whole product is a **pipeline that runs per-asset in a fixed order**: ingest
 Each stage is a `@Transactional` service returning a small result record:
 
 - `service/PriceIngestionService` — fetches bars via a `PriceProvider`, inserts only missing `(asset, ts)` rows (idempotent upsert), and records every attempt as an `ingestion_run` (start → markSuccess/markFailure).
-- `metric/MetricsService` — recomputes `RETURN_1D`, `SMA_20`, `VOL_20` over a lookback window and inserts only missing `(asset, ts, metric_type)` rows. All math is `BigDecimal` with a shared `MathContext(20, HALF_UP)`; volatility uses a hand-rolled Newton sqrt.
-- `alert/AlertsService` — anchors on the latest `price_bar` date, loads enabled `alert_rule` rows, and dispatches on `rule_key` (`VOL_SPIKE_20`, `DRAWDOWN_10PCT`) in a `switch`. Alert dedup is idempotent on `(asset, rule, ts)`.
+- `metric/MetricsService` — recomputes `RETURN_1D`, `SMA_20`, `SMA_50`, `VOL_20` over a lookback window and inserts only missing `(asset, ts, metric_type)` rows. All math is `BigDecimal` with a shared `MathContext(20, HALF_UP)`; volatility uses a hand-rolled Newton sqrt.
+- `alert/AlertsService` — anchors on the latest `price_bar` date, loads enabled `alert_rule` rows, and dispatches on `rule_key` (`VOL_SPIKE_20`, `DRAWDOWN_10PCT`, `MA_CROSSOVER_20_50`) in a `switch`. Alert dedup is idempotent on `(asset, rule, ts)`.
 
 **Adding an alert rule** means two coordinated changes: seed a row in a new Flyway migration (see `V8__seed_alert_rules.sql`) with the right `rule_key` and params, and add a matching `case` in `AlertsService.evaluateAlertsForAsset`. A rule row with no matching `case` is silently ignored.
 

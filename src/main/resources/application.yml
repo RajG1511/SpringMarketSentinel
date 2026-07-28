@@ -57,3 +57,9 @@ management:
     web:
       exposure:
         include: health,info,metrics
+  health:
+    # Don't gate overall app health on SMTP reachability: email is an optional,
+    # self-disabling delivery channel, so a missing/unreachable mail server must
+    # not make /actuator/health report DOWN.
+    mail:
+      enabled: false

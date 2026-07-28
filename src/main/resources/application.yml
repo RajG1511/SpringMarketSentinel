@@ -16,6 +16,19 @@ spring:
         format_sql: true
   flyway:
     enabled: true
+  # SMTP for alert emails. Leave MAIL_HOST unset to disable email delivery entirely
+  # (the app still runs; alerts just won't be emailed). See EMAIL_SETUP.md.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 market:
   metrics:
     lookbackDays: 400
@@ -26,6 +39,12 @@ market:
     cron: "0 10 18 * * MON-FRI" # 6:10 PM weekdays
   alphavantage:
     apiKey: ${ALPHAVANTAGE_API_KEY:}
+  alerts:
+    webhook:
+      url: ${ALERTS_WEBHOOK_URL:}          # Slack/Discord incoming webhook; blank = disabled
+    email:
+      to: ${ALERTS_EMAIL_TO:}              # recipient address; blank = disabled
+      from: ${ALERTS_EMAIL_FROM:alerts@market-sentinel.local}
 springdoc:
   api-docs:
     path: /v3/api-docs

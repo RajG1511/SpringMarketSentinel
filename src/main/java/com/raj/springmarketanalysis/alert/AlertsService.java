@@ -6,8 +6,10 @@ import com.raj.springmarketanalysis.asset.AssetRepository;
 import com.raj.springmarketanalysis.metric.MetricType;
 import com.raj.springmarketanalysis.metric.MetricValue;
 import com.raj.springmarketanalysis.metric.MetricValueRepository;
+import com.raj.springmarketanalysis.notification.AlertNotification;
 import com.raj.springmarketanalysis.price.PriceBar;
 import com.raj.springmarketanalysis.price.PriceBarRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,19 +28,22 @@ public class AlertsService {
     private final AlertEventRepository eventRepo;
     private final MetricValueRepository metricRepo;
     private final PriceBarRepository priceRepo;
+    private final ApplicationEventPublisher events;
 
     public AlertsService(
             AssetRepository assetRepo,
             AlertRuleRepository ruleRepo,
             AlertEventRepository eventRepo,
             MetricValueRepository metricRepo,
-            PriceBarRepository priceRepo
+            PriceBarRepository priceRepo,
+            ApplicationEventPublisher events
     ) {
         this.assetRepo = assetRepo;
         this.ruleRepo = ruleRepo;
         this.eventRepo = eventRepo;
         this.metricRepo = metricRepo;
         this.priceRepo = priceRepo;
+        this.events = events;
     }
 
     public record AlertRunResult(Long assetId, String symbol, int fired, String status) {}
@@ -140,7 +145,13 @@ public class AlertsService {
         if (eventRepo.existsByAssetIdAndRuleIdAndTs(asset.getId(), rule.getId(), ts)) {
             return 0; // idempotent
         }
-        eventRepo.save(new AlertEvent(asset, rule, ts, severity, message));
+        AlertEvent event = eventRepo.save(new AlertEvent(asset, rule, ts, severity, message));
+
+        // Delivered by NotificationDispatcher only after this transaction commits.
+        events.publishEvent(new AlertNotification(
+                event.getId(), asset.getId(), asset.getSymbol(),
+                rule.getRuleKey(), severity, ts, message
+        ));
         return 1;
     }
 

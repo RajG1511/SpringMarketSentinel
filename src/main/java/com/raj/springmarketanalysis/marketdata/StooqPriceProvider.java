@@ -22,8 +22,12 @@ public class StooqPriceProvider implements PriceProvider {
 
         String url = "https://stooq.com/q/d/l/?s=" + stooqSymbol + "&i=d";
 
+        // Stooq serves an anti-bot JS challenge page (not CSV) to clients without a
+        // browser-like User-Agent, so set one explicitly.
         String csv = restClient.get()
                 .uri(url)
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
                 .retrieve()
                 .body(String.class);
 

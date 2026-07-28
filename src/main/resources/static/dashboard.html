@@ -292,6 +292,13 @@ tbody tr:hover{background:var(--surface-2)}
 const API = "/api/v1";
 const $ = id => document.getElementById(id);
 
+/* Escape before any interpolation into innerHTML. Asset names are free-form
+   user input (the seeded "SPDR S&P 500" already contains an ampersand), and
+   alert messages are server-built strings that could grow to include them.
+   Anything rendered as markup goes through here. */
+const esc = v => String(v ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
 /* list endpoints may be plain arrays today and paged objects later */
 const rows = j => Array.isArray(j) ? j : (j && Array.isArray(j.content) ? j.content : []);
 
@@ -431,7 +438,7 @@ function drawChart(){
   /* x labels: first, middle, last only — no label spam */
   [0, Math.floor((n-1)/2), n-1].forEach((i, k) => {
     if(!chartDates[i]) return;
-    out += `<text class="axis-text" x="${scaleX(i,n).toFixed(1)}" y="${H-PAD.b+16}" text-anchor="${k===0?"start":k===2?"end":"middle"}">${chartDates[i]}</text>`;
+    out += `<text class="axis-text" x="${scaleX(i,n).toFixed(1)}" y="${H-PAD.b+16}" text-anchor="${k===0?"start":k===2?"end":"middle"}">${esc(chartDates[i])}</text>`;
   });
 
   out += `<path class="series" d="${pathFor(series.close, lo, hi)}" stroke="var(--s1)"/>`;
@@ -481,7 +488,7 @@ function wireCrosshair(lo, hi, n){
     const cv = series.close[i];
     $("xhDot").setAttribute("cx", x); $("xhDot").setAttribute("cy", scaleY(cv, lo, hi));
     tip.innerHTML =
-      `<div style="color:var(--ink);margin-bottom:4px">${chartDates[i]}</div>` +
+      `<div style="color:var(--ink);margin-bottom:4px">${esc(chartDates[i])}</div>` +
       `<div><span style="color:var(--s1)">■</span> Close ${num(cv)}</div>` +
       (series.sma20[i] !== null ? `<div><span style="color:var(--s2)">■</span> SMA 20 ${num(series.sma20[i])}</div>` : "") +
       (series.sma50[i] !== null ? `<div><span style="color:var(--s3)">■</span> SMA 50 ${num(series.sma50[i])}</div>` : "");
@@ -496,7 +503,7 @@ function drawTable(){
   const n = chartDates.length;
   let h = "<table><thead><tr><th>Date</th><th>Close</th><th>SMA 20</th><th>SMA 50</th></tr></thead><tbody>";
   for(let i = n - 1; i >= 0; i--){
-    h += `<tr><td>${chartDates[i]}</td><td>${num(series.close[i])}</td><td>${num(series.sma20[i])}</td><td>${num(series.sma50[i])}</td></tr>`;
+    h += `<tr><td>${esc(chartDates[i])}</td><td>${num(series.close[i])}</td><td>${num(series.sma20[i])}</td><td>${num(series.sma50[i])}</td></tr>`;
   }
   $("tableHost").innerHTML = h + "</tbody></table>";
 }
@@ -599,7 +606,9 @@ async function loadAlerts(){
     };
     let h = "<table><thead><tr><th>Date</th><th>Rule</th><th>Severity</th><th>Why it fired</th></tr></thead><tbody>";
     list.forEach(a => {
-      h += `<tr><td>${a.ts}</td><td>${a.ruleKey}</td><td><span class="pill ${sev(a.severity)}">${a.severity}</span></td><td>${a.message ?? ""}</td></tr>`;
+      h += `<tr><td>${esc(a.ts)}</td><td>${esc(a.ruleKey)}</td>`
+         + `<td><span class="pill ${sev(a.severity)}">${esc(a.severity)}</span></td>`
+         + `<td>${esc(a.message)}</td></tr>`;
     });
     $("alertsHost").innerHTML = h + "</tbody></table>";
   }catch(e){

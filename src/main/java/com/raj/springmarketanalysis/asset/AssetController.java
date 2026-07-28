@@ -2,6 +2,7 @@ package com.raj.springmarketanalysis.asset;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -34,9 +35,15 @@ public class AssetController {
         return repo.save(new Asset(symbol, name, assetType));
     }
 
+    /**
+     * {@code symbol} and {@code assetType} are constrained to the characters those
+     * identifiers actually use. {@code name} stays free-form on purpose — real names
+     * contain punctuation ("SPDR S&amp;P 500 ETF Trust") — so it is the consumer's job
+     * to escape it on output, which the dashboard does.
+     */
     public record CreateAssetRequest(
-            @NotBlank @Size(max = 20) String symbol,
+            @NotBlank @Size(max = 20) @Pattern(regexp = "[A-Za-z0-9.^-]+", message = "symbol must be alphanumeric") String symbol,
             @NotBlank @Size(max = 200) String name,
-            @NotBlank @Size(max = 50) String assetType
+            @NotBlank @Size(max = 50) @Pattern(regexp = "[A-Za-z_ -]+", message = "assetType must be alphabetic") String assetType
     ) {}
 }

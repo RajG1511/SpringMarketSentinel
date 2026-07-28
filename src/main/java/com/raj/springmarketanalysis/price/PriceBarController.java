@@ -3,15 +3,20 @@ package com.raj.springmarketanalysis.price;
 import com.raj.springmarketanalysis.api.ApiExceptions;
 import com.raj.springmarketanalysis.asset.Asset;
 import com.raj.springmarketanalysis.asset.AssetRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/assets")
 public class PriceBarController {
+
+    static final int MAX_PAGE_SIZE = 2000;
 
     private final AssetRepository assetRepo;
     private final PriceBarRepository priceRepo;
@@ -21,31 +26,38 @@ public class PriceBarController {
         this.priceRepo = priceRepo;
     }
 
+    /**
+     * Paged so the response can't grow without bound as history accumulates.
+     * Sorting is fixed to ascending {@code ts} — chart consumers depend on the
+     * order, and letting callers re-sort a page of a time series only produces
+     * confusing results.
+     */
     @GetMapping("/{assetId}/prices")
-    public List<PriceBarResponse> prices(
+    public Page<PriceBarResponse> prices(
             @PathVariable Long assetId,
             @RequestParam(required = false) LocalDate from,
-            @RequestParam(required = false) LocalDate to
+            @RequestParam(required = false) LocalDate to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "500") int size
     ) {
-        Asset asset = assetRepo.findById(assetId)
+        assetRepo.findById(assetId)
                 .orElseThrow(() -> new ApiExceptions.NotFoundException("Asset not found: " + assetId));
 
-        List<PriceBar> bars;
+        Pageable pageable = PageRequest.of(page, Math.min(size, MAX_PAGE_SIZE), Sort.by(Sort.Direction.ASC, "ts"));
+
+        Page<PriceBar> bars;
         if (from != null && to != null) {
-            bars = priceRepo.findByAssetIdAndTsBetweenOrderByTsAsc(assetId, from, to);
+            bars = priceRepo.findByAssetIdAndTsBetween(assetId, from, to, pageable);
         } else if (from != null) {
-            bars = priceRepo.findByAssetIdAndTsGreaterThanEqualOrderByTsAsc(assetId, from);
+            bars = priceRepo.findByAssetIdAndTsGreaterThanEqual(assetId, from, pageable);
         } else if (to != null) {
-            bars = priceRepo.findByAssetIdAndTsLessThanEqualOrderByTsAsc(assetId, to);
+            bars = priceRepo.findByAssetIdAndTsLessThanEqual(assetId, to, pageable);
         } else {
-            bars = priceRepo.findByAssetIdOrderByTsAsc(assetId);
+            bars = priceRepo.findByAssetId(assetId, pageable);
         }
 
-        return bars.stream()
-                .map(b -> new PriceBarResponse(
-                        b.getTs(), b.getOpen(), b.getHigh(), b.getLow(), b.getClose(), b.getVolume()
-                ))
-                .toList();
+        return bars.map(b -> new PriceBarResponse(
+                b.getTs(), b.getOpen(), b.getHigh(), b.getLow(), b.getClose(), b.getVolume()));
     }
 
     @GetMapping("/{assetId}/prices/latest")

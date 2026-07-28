@@ -62,9 +62,19 @@ When `AlertsService` writes a *new* `alert_event`, it publishes an `AlertNotific
 - All time-series tables enforce idempotency with a unique constraint: `price_bar(asset_id, ts)`, `metric_value(asset_id, ts, metric_type)`, `alert_event(asset_id, rule_id, ts)`. The services rely on these — inserts check existence first rather than upserting in SQL.
 - `ts` on time-series rows is a `LocalDate` (daily close), while audit timestamps (`created_at`, `started_at`) are `Instant`.
 
+### Dashboard
+
+`src/main/resources/static/dashboard.html` — a single self-contained page (vanilla JS, inline SVG, no external assets so it works offline) served at `http://localhost:8080/dashboard.html`. It only consumes the public REST API, so it doubles as a check that the API is usable.
+
+Four panels: the ingest → metrics → alerts pipeline with per-stage Run buttons; a price chart with SMA_20/SMA_50 overlays; the Redis cache panel; and alert history. Series colours are deliberate — categorical slots blue/orange/aqua, chosen because they stay distinguishable under deuteranopia (the obvious cyan/violet pairing does not).
+
+The cache panel is backed by `metric/CacheStatsController` (`GET /api/v1/admin/cache/latest-metrics/{assetId}`), which reports hit/miss/put counters plus whether the key is in Redis and its TTL. Counters come from `enableStatistics()` on the cache manager. The panel times each read and then diffs the counters to label it a hit or a miss rather than guessing from latency. **`Recompute (evict)` deliberately does not refresh the headline tiles** — reading `/metrics/latest` would repopulate the entry immediately and the next read could never demonstrate a miss.
+
 ### Web layer
 
-Controllers are thin and split by domain under `/api/v1/assets/{assetId}/...` (assets, prices, metrics, alerts) plus `/api/v1/admin/ingest/prices`. `api/GlobalExceptionHandler` maps exceptions to a common `ApiError` JSON body. Note the current mapping quirk: "not found" is thrown as `IllegalArgumentException` → **400**, not 404, even though a `NotFoundException` → 404 handler exists but is unused.
+Controllers are thin and split by domain under `/api/v1/assets/{assetId}/...` (assets, prices, metrics, alerts) plus `/api/v1/admin/ingest/prices`.
+
+`GET /prices` and `GET /metrics` return a Spring `Page` (`{content: [...], totalElements, ...}`), not a bare array — `page`/`size` params, capped defaults. `/prices` pages in the database with a fixed ascending `ts` sort; `/metrics` fans out over several metric types and concatenates them, so there is no single query to paginate and it slices the combined list instead. `api/GlobalExceptionHandler` maps exceptions to a common `ApiError` JSON body. Note the current mapping quirk: "not found" is thrown as `IllegalArgumentException` → **400**, not 404, even though a `NotFoundException` → 404 handler exists but is unused.
 
 ## Config
 
@@ -74,6 +84,8 @@ Alert delivery is env-driven and each channel self-disables when unset: `ALERTS_
 
 **Caching:** `GET /assets/{id}/metrics/latest` is Redis-cached via `@Cacheable` (`CacheConfig`, cache name `latestMetrics`, key = assetId, TTL `market.cache.ttlSeconds` default 300s) and evicted by `@CacheEvict` whenever `computeMetricsForAsset` runs. Cache values are JSON, written by a serializer bound to the cache's value type (`Jackson2JsonRedisSerializer<LatestMetrics>`) with no polymorphic type information embedded — so a forged Redis value can't choose which class the app instantiates. Each cache is registered explicitly via `withCacheConfiguration`, and `disableCreateOnMissingCache()` makes an unregistered cache name fail fast rather than silently fall back to JDK serialization; adding a cache means adding an entry in `CacheConfig`. Redis connects lazily via `spring.data.redis.host/port` (`REDIS_HOST`/`REDIS_PORT`), so the app still boots when Redis is down.
 
-**Degraded mode.** Spring's default `CacheErrorHandler` rethrows, which turned an unreachable Redis into a 500 on the cached endpoint. `CacheConfig` overrides `CachingConfigurer.errorHandler()` with `LoggingCacheErrorHandler`, so cache failures are logged and the call falls through to the database — covered by `MetricsCacheDegradedTest`, which points the context at a dead port. Two caveats: a dropped evict leaves a stale entry until the TTL expires, and requests that touch Redis while it is down block on Lettuce's connect timeout (a recompute took ~3 min in a live test), so no Lettuce timeout has been tuned yet.
+**Degraded mode.** Spring's default `CacheErrorHandler` rethrows, which turned an unreachable Redis into a 500 on the cached endpoint. `CacheConfig` overrides `CachingConfigurer.errorHandler()` with `LoggingCacheErrorHandler`, so cache failures are logged and the call falls through to the database — covered by `MetricsCacheDegradedTest`, which points the context at a dead port. One caveat remains: a dropped evict leaves a stale entry until the TTL expires. (The other — requests hanging for minutes on an unreachable Redis — is fixed by the 1s `connect-timeout`/`timeout` in `application.yml`.)
+
+Redis requires a password. `docker-compose.yml` starts it with `--requirepass ms_redis_pass` on `127.0.0.1` only, and `application.yml` defaults `spring.data.redis.password` to the same value, so the local stack still needs no environment variables. Changing the compose password needs `docker compose up -d --force-recreate redis`.
 
 The cache manager is built on a `RedisCacheWriter` configured with `immediateWrites()`. This is deliberate: with Lettuce, Spring Data Redis 4.0 defaults cache writes to fire-and-forget, so `put` returns before Redis applies the SET and a read right after a miss can miss again (and write failures are swallowed). `MetricsCacheIntegrationTest.cacheWritesAreVisibleImmediately` guards this — without it that test fails and `secondReadIsServedFromCache` goes flaky.

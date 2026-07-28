@@ -68,6 +68,7 @@ public class CacheConfig implements CachingConfigurer {
         return RedisCacheManager.builder(cacheWriter(connectionFactory))
                 .withCacheConfiguration(LATEST_METRICS, config)
                 .disableCreateOnMissingCache() // an unregistered cache name fails fast instead of falling back to JDK serialization
+                .enableStatistics()            // hit/miss counters, surfaced by CacheStatsController
                 .build();
     }
 

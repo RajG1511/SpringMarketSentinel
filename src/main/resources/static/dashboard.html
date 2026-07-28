@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en" data-palette="#3987e5,#d95926,#199e70">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Market Sentinel — Console</title>
+<style>
+/* ============================================================
+   Market Sentinel console.
+   Dark instrument panel: condensed technical headings, monospace
+   data, recessive rules. Series colours are the validated
+   categorical slots 1-3 (blue / orange / aqua) — deutan-safe on
+   this surface. No external assets: this must run offline.
+   ============================================================ */
+:root{
+  --plane:#0d0d0d;
+  --surface:#1a1a19;
+  --surface-2:#211f1e;
+  --rule:#2e2c2a;
+  --rule-bright:#454240;
+  --ink:#ffffff;
+  --ink-2:#c3c2b7;
+  --ink-3:#84837a;
+
+  --s1:#3987e5;   /* Close   */
+  --s2:#d95926;   /* SMA 20  */
+  --s3:#199e70;   /* SMA 50  */
+
+  --good:#0ca30c;
+  --warning:#fab219;
+  --serious:#ec835a;
+  --critical:#d03b3b;
+
+  --mono:"Cascadia Mono","Consolas","SF Mono","Menlo",monospace;
+  --display:"Bahnschrift","DIN Alternate","Segoe UI Semibold","Franklin Gothic Medium",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--plane);
+  color:var(--ink-2);
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.5;
+  padding:0 0 64px;
+  /* faint vignette so the panels read as lit instruments */
+  background-image:radial-gradient(1200px 600px at 50% -10%,#1b1b1a 0%,var(--plane) 70%);
+}
+/* subtle scanline veil — pure decoration, no layout impact */
+body::after{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:9;
+  background:repeating-linear-gradient(0deg,rgba(255,255,255,.014) 0 1px,transparent 1px 3px);
+}
+h1,h2,h3{font-family:var(--display);font-weight:600;color:var(--ink);margin:0;letter-spacing:.02em}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1280px;margin:0 auto;padding:0 20px}
+header.bar{
+  border-bottom:1px solid var(--rule);
+  background:linear-gradient(180deg,#131312,#0f0f0e);
+  position:sticky;top:0;z-index:10;
+}
+.bar-in{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:14px 0}
+.brand{font-family:var(--display);font-size:19px;color:var(--ink);letter-spacing:.14em;text-transform:uppercase}
+.brand span{color:var(--s2)}
+.bar-spacer{flex:1}
+.micro{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-3)}
+
+select,button{font-family:var(--mono);font-size:12px}
+select{
+  background:var(--surface-2);color:var(--ink);border:1px solid var(--rule-bright);
+  padding:7px 10px;border-radius:2px;
+}
+button{
+  background:var(--surface-2);color:var(--ink-2);border:1px solid var(--rule-bright);
+  padding:7px 12px;border-radius:2px;cursor:pointer;
+  letter-spacing:.06em;text-transform:uppercase;font-size:11px;
+  transition:background .12s,border-color .12s,color .12s;
+}
+button:hover:not(:disabled){background:#2c2a28;color:var(--ink);border-color:#5d5955}
+button:disabled{opacity:.45;cursor:not-allowed}
+button:focus-visible,select:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+button.primary{border-color:#3a6ea8;color:#cfe2fa}
+button.primary:hover:not(:disabled){background:#17293d;border-color:var(--s1)}
+
+/* ---------- panels ---------- */
+.grid{display:grid;gap:14px;margin-top:14px}
+.cols-4{grid-template-columns:repeat(4,1fr)}
+.split{grid-template-columns:minmax(0,2.05fr) minmax(0,1fr)}
+@media(max-width:1040px){.split{grid-template-columns:1fr}.cols-4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.cols-4{grid-template-columns:1fr}}
+
+.panel{
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:16px;min-width:0;
+  animation:rise .45s cubic-bezier(.2,.7,.3,1) both;
+}
+.panel>h2{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+@keyframes rise{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+.panel:nth-child(1){animation-delay:.02s}
+.panel:nth-child(2){animation-delay:.07s}
+.panel:nth-child(3){animation-delay:.12s}
+.panel:nth-child(4){animation-delay:.17s}
+
+/* ---------- stat tiles ---------- */
+.tile .label{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-3)}
+.tile .value{font-family:var(--display);font-size:31px;color:var(--ink);line-height:1.15;margin-top:6px;font-variant-numeric:tabular-nums}
+.tile .sub{font-size:11px;color:var(--ink-3);margin-top:3px}
+.pos{color:#5fd08a}.neg{color:var(--serious)}
+
+/* ---------- pipeline ---------- */
+.pipe{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+.stage{
+  flex:1 1 210px;background:var(--surface-2);border:1px solid var(--rule);
+  border-radius:2px;padding:13px;min-width:0;
+  display:flex;flex-direction:column;   /* keeps buttons on a common baseline */
+}
+.stage h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.stage .desc{font-size:11px;color:var(--ink-3);flex:1}
+.stage .out{
+  font-size:11px;margin-top:9px;padding:7px 8px;border-radius:2px;
+  background:#131211;border:1px solid var(--rule);color:var(--ink-3);
+  white-space:pre-wrap;word-break:break-word;min-height:31px;
+}
+.arrow{
+  display:flex;align-items:center;justify-content:center;width:34px;
+  color:var(--rule-bright);font-size:17px;flex:0 0 34px;
+}
+@media(max-width:760px){.arrow{width:100%;flex-basis:100%;height:22px;transform:rotate(90deg)}}
+.stage button{margin-top:9px;width:100%}
+.note{font-size:11px;color:var(--ink-3);margin-top:11px;border-left:2px solid var(--rule-bright);padding-left:9px}
+
+/* ---------- chart ---------- */
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:9px}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--ink-2)}
+.swatch{width:13px;height:3px;border-radius:2px;flex:0 0 13px}
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gridline{stroke:var(--rule);stroke-width:1}
+.axis-text{fill:var(--ink-3);font-family:var(--mono);font-size:10px}
+.series{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.crosshair{stroke:var(--rule-bright);stroke-width:1;stroke-dasharray:3 3}
+.dot{stroke:var(--surface);stroke-width:2}
+
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule)}
+th{font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3);font-weight:400}
+td{color:var(--ink-2);font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--surface-2)}
+.scroll{max-height:280px;overflow:auto}
+
+/* ---------- cache ---------- */
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:12px}
+.kv:last-child{border-bottom:0}
+.kv .k{color:var(--ink-3)}
+.kv .v{color:var(--ink);font-variant-numeric:tabular-nums}
+.ttlbar{height:5px;background:var(--surface-2);border-radius:3px;overflow:hidden;margin-top:5px;border:1px solid var(--rule)}
+.ttlfill{height:100%;background:var(--s1);width:0%;transition:width .95s linear}
+.pill{
+  display:inline-flex;align-items:center;gap:5px;font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;padding:2px 7px;border-radius:2px;border:1px solid;
+}
+.pill.hit{color:#6ee7a8;border-color:#2c6b45;background:#11251a}
+.pill.miss{color:var(--serious);border-color:#7a4633;background:#2a1710}
+.pill.warn{color:var(--warning);border-color:#7a5f14;background:#241d09}
+.pill.dead{color:var(--critical);border-color:#7d2b2b;background:#260f0f}
+.log{font-size:11px;max-height:150px;overflow:auto;margin-top:10px}
+.log div{display:flex;gap:9px;align-items:center;padding:4px 0;border-bottom:1px solid var(--rule)}
+.log .t{color:var(--ink-3);flex:0 0 62px}
+.log .ms{color:var(--ink);margin-left:auto;font-variant-numeric:tabular-nums}
+.hidden{display:none}
+.err{color:var(--serious)}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="wrap bar-in">
+    <div class="brand">Market <span>Sentinel</span></div>
+    <label class="micro" for="asset">Asset</label>
+    <select id="asset" aria-label="Select asset"></select>
+    <div class="bar-spacer"></div>
+    <span class="micro" id="clock"></span>
+    <span class="pill warn" id="apiState">connecting</span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ============ stat tiles ============ -->
+  <section class="grid cols-4" aria-label="Headline figures">
+    <div class="panel tile">
+      <div class="label">Last close</div>
+      <div class="value" id="tClose">—</div>
+      <div class="sub" id="tCloseSub">no data</div>
+    </div>
+    <div class="panel tile">
+      <div class="label">1-day return</div>
+      <div class="value" id="tRet">—</div>
+      <div class="sub">RETURN_1D</div>
+    </div>
+    <div class="panel tile">
+      <div class="label">20-day volatility</div>
+      <div class="value" id="tVol">—</div>
+      <div class="sub">VOL_20, daily σ</div>
+    </div>
+    <div class="panel tile">
+      <div class="label">Cache hit rate</div>
+      <div class="value" id="tHit">—</div>
+      <div class="sub" id="tHitSub">latestMetrics</div>
+    </div>
+  </section>
+
+  <!-- ============ pipeline ============ -->
+  <section class="grid">
+    <div class="panel">
+      <h2>Pipeline — runs in this order, per asset</h2>
+      <div class="pipe">
+        <div class="stage">
+          <h3>1 · Ingest</h3>
+          <div class="desc">Fetch daily bars from the price provider into <code>price_bar</code>. Skips dates already stored.</div>
+          <button data-run="ingest">Run ingest</button>
+          <div class="out" id="outIngest">idle</div>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="stage">
+          <h3>2 · Metrics</h3>
+          <div class="desc">Compute RETURN_1D, SMA_20, SMA_50, VOL_20 from those bars. Evicts this asset's cache entry.</div>
+          <button data-run="metrics">Run metrics</button>
+          <div class="out" id="outMetrics">idle</div>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="stage">
+          <h3>3 · Alerts</h3>
+          <div class="desc">Evaluate enabled rules against the metrics and write <code>alert_event</code> rows.</div>
+          <button data-run="alerts">Run alerts</button>
+          <div class="out" id="outAlerts">idle</div>
+        </div>
+      </div>
+      <div class="note">Order matters: metrics read <code>price_bar</code>, and alerts read <code>metric_value</code>. Running out of order just produces nothing — each stage reads what the one before it wrote.</div>
+    </div>
+  </section>
+
+  <!-- ============ chart + cache ============ -->
+  <section class="grid split">
+    <div class="panel">
+      <h2>Price &amp; moving averages</h2>
+      <div class="legend" id="legend">
+        <div class="legend-item"><span class="swatch" style="background:var(--s1)"></span>Close</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--s2)"></span>SMA 20</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--s3)"></span>SMA 50</div>
+      </div>
+      <div id="chartHost"><svg id="chart" viewBox="0 0 900 330" role="img" aria-label="Close price with 20 and 50 day moving averages"></svg></div>
+      <div style="margin-top:10px"><button id="toggleTable" aria-expanded="false">Show data table</button></div>
+      <div class="scroll hidden" id="tableHost" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Redis cache — latestMetrics</h2>
+      <div class="kv"><span class="k">Redis</span><span class="v" id="cRedis">—</span></div>
+      <div class="kv"><span class="k">Key</span><span class="v" id="cKey" style="font-size:11px">—</span></div>
+      <div class="kv"><span class="k">Entry</span><span class="v" id="cCached">—</span></div>
+      <div class="kv"><span class="k">Hits / misses</span><span class="v" id="cHM">—</span></div>
+      <div class="kv"><span class="k">Writes</span><span class="v" id="cPuts">—</span></div>
+      <div style="margin-top:11px">
+        <div class="micro">TTL <span id="cTtl" style="color:var(--ink-2)">—</span></div>
+        <div class="ttlbar"><div class="ttlfill" id="cTtlBar"></div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:13px;flex-wrap:wrap">
+        <button class="primary" id="btnRead">Read latest</button>
+        <button id="btnEvict">Recompute (evict)</button>
+      </div>
+      <div class="log" id="cLog" aria-live="polite"></div>
+      <div class="note">Each read is timed, then the hit/miss counters are re-read to label it. A miss goes to Postgres and writes the entry back; the next read is served from memory until the TTL runs out.</div>
+    </div>
+  </section>
+
+  <!-- ============ alerts ============ -->
+  <section class="grid">
+    <div class="panel">
+      <h2>Alert history</h2>
+      <div class="scroll" id="alertsHost"><p style="color:var(--ink-3)">Loading…</p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* ================================================================
+   All data comes from the app's own REST API. Every fetch is
+   defensive: a panel that fails renders an error line instead of
+   taking the page down with it.
+   ================================================================ */
+const API = "/api/v1";
+const $ = id => document.getElementById(id);
+
+/* list endpoints may be plain arrays today and paged objects later */
+const rows = j => Array.isArray(j) ? j : (j && Array.isArray(j.content) ? j.content : []);
+
+async function api(path, opts){
+  const res = await fetch(API + path, opts);
+  if(!res.ok) throw new Error("HTTP " + res.status + " " + path);
+  return res.status === 204 ? null : res.json();
+}
+const num = (v, d=2) => v === null || v === undefined ? "—" : Number(v).toFixed(d);
+const pct = (v, d=2) => v === null || v === undefined ? "—" : (Number(v)*100).toFixed(d) + "%";
+const clock = () => new Date().toLocaleTimeString([], {hour12:false});
+
+let assetId = null;
+let ttlRemaining = null, ttlCeiling = 300;
+
+/* ---------------- bootstrap ---------------- */
+async function boot(){
+  try{
+    const assets = rows(await api("/assets"));
+    const sel = $("asset");
+    sel.innerHTML = "";
+    assets.forEach(a => {
+      const o = document.createElement("option");
+      o.value = a.id; o.textContent = a.symbol + " · " + a.name;
+      sel.appendChild(o);
+    });
+    if(!assets.length){ setApi("no assets","warn"); return; }
+    assetId = assets[0].id;
+    sel.value = assetId;
+    sel.addEventListener("change", () => { assetId = Number(sel.value); refreshAll(); });
+    setApi("online","hit");
+    refreshAll();
+  }catch(e){
+    setApi("api unreachable","dead");
+    $("alertsHost").innerHTML = '<p class="err">Cannot reach the API. Is the app running on :8080?</p>';
+  }
+}
+function setApi(text, kind){
+  const el = $("apiState");
+  el.textContent = text;
+  el.className = "pill " + kind;
+}
+
+function refreshAll(){
+  loadSeries();
+  loadLatest();
+  loadCache();
+  loadAlerts();
+}
+
+/* ---------------- headline tiles ---------------- */
+async function loadLatest(){
+  try{
+    const m = await api(`/assets/${assetId}/metrics/latest`);
+    $("tClose").textContent = "—";
+    $("tRet").textContent = pct(m.return1d);
+    $("tRet").className = "value " + (m.return1d >= 0 ? "pos" : "neg");
+    $("tVol").textContent = pct(m.vol20);
+    $("tCloseSub").textContent = m.asOf ? "as of " + m.asOf : "no data";
+  }catch(e){
+    $("tRet").textContent = "—"; $("tVol").textContent = "—";
+  }
+  try{
+    const p = await api(`/assets/${assetId}/prices/latest`);
+    $("tClose").textContent = num(p.close);
+    $("tCloseSub").textContent = "as of " + p.ts;
+  }catch(e){ /* leave the dash */ }
+}
+
+/* ---------------- chart ---------------- */
+let series = {close:[], sma20:[], sma50:[]}, chartDates = [];
+
+async function loadSeries(){
+  try{
+    /* both endpoints are paged; the chart wants the whole window, so ask for it */
+    const [prices, metrics] = await Promise.all([
+      api(`/assets/${assetId}/prices?size=2000`),
+      api(`/assets/${assetId}/metrics?types=SMA_20,SMA_50&size=5000`)
+    ]);
+    const bars = rows(prices);
+    const mv = rows(metrics);
+    const byType = t => {
+      const map = new Map();
+      mv.filter(m => m.metricType === t).forEach(m => map.set(m.ts, Number(m.value)));
+      return map;
+    };
+    const s20 = byType("SMA_20"), s50 = byType("SMA_50");
+    chartDates = bars.map(b => b.ts);
+    series.close = bars.map(b => Number(b.close));
+    series.sma20 = bars.map(b => s20.has(b.ts) ? s20.get(b.ts) : null);
+    series.sma50 = bars.map(b => s50.has(b.ts) ? s50.get(b.ts) : null);
+    drawChart();
+    drawTable();
+  }catch(e){
+    $("chartHost").innerHTML = '<p class="err">Could not load price series.</p>';
+  }
+}
+
+const PAD = {l:52, r:14, t:14, b:26}, W = 900, H = 330;
+
+function scaleY(v, lo, hi){
+  const h = H - PAD.t - PAD.b;
+  return PAD.t + h - ((v - lo) / (hi - lo || 1)) * h;
+}
+function scaleX(i, n){
+  const w = W - PAD.l - PAD.r;
+  return PAD.l + (n <= 1 ? 0 : (i / (n - 1)) * w);
+}
+function pathFor(values, lo, hi){
+  let d = "", pen = false;
+  values.forEach((v, i) => {
+    if(v === null || Number.isNaN(v)){ pen = false; return; }
+    const x = scaleX(i, values.length), y = scaleY(v, lo, hi);
+    d += (pen ? "L" : "M") + x.toFixed(1) + " " + y.toFixed(1) + " ";
+    pen = true;
+  });
+  return d.trim();
+}
+
+function drawChart(){
+  const svg = $("chart");
+  const n = series.close.length;
+  if(!n){ svg.innerHTML = '<text x="20" y="30" class="axis-text">No price data — run ingest, then metrics.</text>'; return; }
+
+  const all = [...series.close, ...series.sma20, ...series.sma50].filter(v => v !== null && !Number.isNaN(v));
+  let lo = Math.min(...all), hi = Math.max(...all);
+  const padY = (hi - lo) * 0.08 || 1;
+  lo -= padY; hi += padY;
+
+  let out = "";
+  /* recessive gridlines + y labels */
+  for(let i = 0; i <= 4; i++){
+    const v = lo + (hi - lo) * (i / 4), y = scaleY(v, lo, hi);
+    out += `<line class="gridline" x1="${PAD.l}" y1="${y.toFixed(1)}" x2="${W-PAD.r}" y2="${y.toFixed(1)}"/>`;
+    out += `<text class="axis-text" x="${PAD.l-8}" y="${(y+3).toFixed(1)}" text-anchor="end">${v.toFixed(0)}</text>`;
+  }
+  /* x labels: first, middle, last only — no label spam */
+  [0, Math.floor((n-1)/2), n-1].forEach((i, k) => {
+    if(!chartDates[i]) return;
+    out += `<text class="axis-text" x="${scaleX(i,n).toFixed(1)}" y="${H-PAD.b+16}" text-anchor="${k===0?"start":k===2?"end":"middle"}">${chartDates[i]}</text>`;
+  });
+
+  out += `<path class="series" d="${pathFor(series.close, lo, hi)}" stroke="var(--s1)"/>`;
+  out += `<path class="series" d="${pathFor(series.sma20, lo, hi)}" stroke="var(--s2)"/>`;
+  out += `<path class="series" d="${pathFor(series.sma50, lo, hi)}" stroke="var(--s3)"/>`;
+
+  /* direct labels at the right edge — identity without relying on colour */
+  const lastOf = a => { for(let i=a.length-1;i>=0;i--) if(a[i]!==null && !Number.isNaN(a[i])) return {v:a[i], i}; return null; };
+  [["Close",series.close,"var(--s1)"],["SMA 20",series.sma20,"var(--s2)"],["SMA 50",series.sma50,"var(--s3)"]]
+    .forEach(([name, arr, col]) => {
+      const last = lastOf(arr); if(!last) return;
+      const y = scaleY(last.v, lo, hi);
+      out += `<circle class="dot" cx="${scaleX(last.i,n).toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${col}"/>`;
+    });
+
+  /* crosshair layer */
+  out += `<g id="xhair" style="display:none">
+            <line class="crosshair" y1="${PAD.t}" y2="${H-PAD.b}"/>
+            <circle r="4" class="dot" id="xhDot" fill="var(--s1)"/>
+          </g>`;
+  out += `<rect id="hitzone" x="${PAD.l}" y="${PAD.t}" width="${W-PAD.l-PAD.r}" height="${H-PAD.t-PAD.b}" fill="transparent" style="cursor:crosshair"/>`;
+
+  svg.innerHTML = out;
+  wireCrosshair(lo, hi, n);
+}
+
+/* tooltip lives in HTML, not SVG, so it can wrap and use real type */
+let tip;
+function wireCrosshair(lo, hi, n){
+  const svg = $("chart"), zone = $("hitzone"), xh = $("xhair");
+  if(!tip){
+    tip = document.createElement("div");
+    tip.style.cssText = "position:fixed;pointer-events:none;z-index:20;background:#0b0b0a;border:1px solid var(--rule-bright);border-radius:2px;padding:8px 10px;font-size:11px;color:var(--ink-2);display:none;box-shadow:0 6px 22px rgba(0,0,0,.6)";
+    document.body.appendChild(tip);
+  }
+  const hide = () => { xh.style.display = "none"; tip.style.display = "none"; };
+  zone.addEventListener("mouseleave", hide);
+  zone.addEventListener("mousemove", ev => {
+    const box = svg.getBoundingClientRect();
+    const xPx = (ev.clientX - box.left) / box.width * W;
+    const w = W - PAD.l - PAD.r;
+    let i = Math.round((xPx - PAD.l) / w * (n - 1));
+    i = Math.max(0, Math.min(n - 1, i));
+    const x = scaleX(i, n);
+    xh.style.display = "";
+    xh.querySelector("line").setAttribute("x1", x); xh.querySelector("line").setAttribute("x2", x);
+    const cv = series.close[i];
+    $("xhDot").setAttribute("cx", x); $("xhDot").setAttribute("cy", scaleY(cv, lo, hi));
+    tip.innerHTML =
+      `<div style="color:var(--ink);margin-bottom:4px">${chartDates[i]}</div>` +
+      `<div><span style="color:var(--s1)">■</span> Close ${num(cv)}</div>` +
+      (series.sma20[i] !== null ? `<div><span style="color:var(--s2)">■</span> SMA 20 ${num(series.sma20[i])}</div>` : "") +
+      (series.sma50[i] !== null ? `<div><span style="color:var(--s3)">■</span> SMA 50 ${num(series.sma50[i])}</div>` : "");
+    tip.style.display = "block";
+    tip.style.left = Math.min(ev.clientX + 14, window.innerWidth - tip.offsetWidth - 10) + "px";
+    tip.style.top  = (ev.clientY - 10) + "px";
+  });
+}
+
+/* table view — the non-visual path to the same numbers */
+function drawTable(){
+  const n = chartDates.length;
+  let h = "<table><thead><tr><th>Date</th><th>Close</th><th>SMA 20</th><th>SMA 50</th></tr></thead><tbody>";
+  for(let i = n - 1; i >= 0; i--){
+    h += `<tr><td>${chartDates[i]}</td><td>${num(series.close[i])}</td><td>${num(series.sma20[i])}</td><td>${num(series.sma50[i])}</td></tr>`;
+  }
+  $("tableHost").innerHTML = h + "</tbody></table>";
+}
+$("toggleTable").addEventListener("click", () => {
+  const host = $("tableHost"), btn = $("toggleTable");
+  const shown = !host.classList.toggle("hidden");
+  btn.textContent = shown ? "Hide data table" : "Show data table";
+  btn.setAttribute("aria-expanded", String(shown));
+});
+
+/* ---------------- cache ---------------- */
+async function loadCache(){
+  try{
+    const c = await api(`/admin/cache/latest-metrics/${assetId}`);
+    $("cKey").textContent = c.key;
+    $("cRedis").innerHTML = c.redisReachable
+      ? '<span class="pill hit">reachable</span>'
+      : '<span class="pill dead">down</span>';
+    $("cCached").innerHTML = c.cached
+      ? '<span class="pill hit">present</span>'
+      : '<span class="pill miss">absent</span>';
+    $("cHM").textContent = c.statsAvailable ? `${c.hits} / ${c.misses}` : "—";
+    $("cPuts").textContent = c.statsAvailable ? c.puts : "—";
+    $("tHit").textContent = c.hitRate === null || c.hitRate === undefined ? "—" : pct(c.hitRate, 1);
+    $("tHitSub").textContent = c.statsAvailable ? `${c.hits} hits · ${c.misses} misses` : "latestMetrics";
+    ttlRemaining = c.ttlSeconds !== null && c.ttlSeconds !== undefined && c.ttlSeconds > 0 ? c.ttlSeconds : null;
+    if(ttlRemaining !== null) ttlCeiling = Math.max(ttlCeiling, ttlRemaining);
+    paintTtl();
+    return c;
+  }catch(e){
+    $("cRedis").innerHTML = '<span class="pill dead">unknown</span>';
+    return null;
+  }
+}
+function paintTtl(){
+  if(ttlRemaining === null){
+    $("cTtl").textContent = "no entry";
+    $("cTtlBar").style.width = "0%";
+  }else{
+    $("cTtl").textContent = ttlRemaining + "s";
+    $("cTtlBar").style.width = Math.max(0, Math.min(100, ttlRemaining / ttlCeiling * 100)) + "%";
+  }
+}
+
+function logCall(kind, ms, label){
+  const row = document.createElement("div");
+  row.innerHTML = `<span class="t">${clock()}</span><span class="pill ${kind}">${label}</span><span class="ms">${ms} ms</span>`;
+  const log = $("cLog");
+  log.prepend(row);
+  while(log.children.length > 25) log.lastChild.remove();
+}
+
+/* Time the read, then diff the counters to label it honestly. */
+$("btnRead").addEventListener("click", async () => {
+  const btn = $("btnRead"); btn.disabled = true;
+  try{
+    const before = await api(`/admin/cache/latest-metrics/${assetId}`).catch(() => null);
+    const t0 = performance.now();
+    await api(`/assets/${assetId}/metrics/latest`);
+    const ms = Math.round(performance.now() - t0);
+    const after = await loadCache();
+    let kind = "warn", label = "served";
+    if(before && after && before.statsAvailable && after.statsAvailable){
+      if(after.hits > before.hits) { kind = "hit"; label = "cache hit"; }
+      else if(after.misses > before.misses) { kind = "miss"; label = "cache miss"; }
+    }
+    logCall(kind, ms, label);
+    loadLatest();
+  }catch(e){
+    logCall("dead", 0, "failed");
+  }finally{ btn.disabled = false; }
+});
+
+$("btnEvict").addEventListener("click", async () => {
+  const btn = $("btnEvict"); btn.disabled = true;
+  try{
+    const t0 = performance.now();
+    await api(`/assets/${assetId}/metrics/compute?lookbackDays=400`, {method:"POST"});
+    logCall("warn", Math.round(performance.now() - t0), "recomputed · evicted");
+    /* deliberately NOT refreshing the tiles here: reading /metrics/latest would
+       repopulate the entry immediately and the next click could never show a
+       miss. Leave the cache cold so "Read latest" demonstrates miss → hit. */
+    await loadCache(); loadSeries();
+  }catch(e){
+    logCall("dead", 0, "failed");
+  }finally{ btn.disabled = false; }
+});
+
+/* ---------------- alerts ---------------- */
+async function loadAlerts(){
+  try{
+    const list = rows(await api(`/assets/${assetId}/alerts`));
+    if(!list.length){
+      $("alertsHost").innerHTML = '<p style="color:var(--ink-3)">No alerts fired for this asset. The rules only trigger on a volatility spike, a drawdown past 10%, or a 20/50 moving-average crossover.</p>';
+      return;
+    }
+    const sev = s => {
+      const map = {CRITICAL:"dead", WARN:"warn", INFO:"hit"};
+      return map[s] || "warn";
+    };
+    let h = "<table><thead><tr><th>Date</th><th>Rule</th><th>Severity</th><th>Why it fired</th></tr></thead><tbody>";
+    list.forEach(a => {
+      h += `<tr><td>${a.ts}</td><td>${a.ruleKey}</td><td><span class="pill ${sev(a.severity)}">${a.severity}</span></td><td>${a.message ?? ""}</td></tr>`;
+    });
+    $("alertsHost").innerHTML = h + "</tbody></table>";
+  }catch(e){
+    $("alertsHost").innerHTML = '<p class="err">Could not load alerts.</p>';
+  }
+}
+
+/* ---------------- pipeline buttons ---------------- */
+const STAGES = {
+  ingest:  {out:"outIngest",  path:() => `/assets/${assetId}/prices/ingest`},
+  metrics: {out:"outMetrics", path:() => `/assets/${assetId}/metrics/compute?lookbackDays=400`},
+  alerts:  {out:"outAlerts",  path:() => `/assets/${assetId}/alerts/evaluate`}
+};
+document.querySelectorAll("[data-run]").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const stage = STAGES[btn.dataset.run], el = $(stage.out);
+    btn.disabled = true; el.textContent = "running…"; el.classList.remove("err");
+    try{
+      const t0 = performance.now();
+      const res = await api(stage.path(), {method:"POST"});
+      const ms = Math.round(performance.now() - t0);
+      el.textContent = JSON.stringify(res, null, 1).replace(/[{}"]/g, "").trim() + `\n(${ms} ms)`;
+      refreshAll();
+    }catch(e){
+      el.textContent = e.message; el.classList.add("err");
+    }finally{ btn.disabled = false; }
+  });
+});
+
+/* ---------------- tickers ---------------- */
+setInterval(() => { $("clock").textContent = clock(); }, 1000);
+setInterval(() => { if(ttlRemaining !== null){ ttlRemaining = Math.max(0, ttlRemaining - 1); paintTtl(); } }, 1000);
+setInterval(() => { if(assetId) loadCache(); }, 10000);
+$("clock").textContent = clock();
+
+boot();
+</script>
+</body>
+</html>

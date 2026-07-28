@@ -4,6 +4,9 @@ target/
 ### Local secrets (API keys, SMTP credentials) — never commit
 .env
 .env.*
+
+### Browser-automation scratch output
+.playwright-mcp/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

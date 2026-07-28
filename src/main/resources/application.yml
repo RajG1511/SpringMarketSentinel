@@ -20,6 +20,15 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
+      # Matches the password docker-compose starts Redis with, so the default
+      # local stack needs no extra environment variables. Override in any real
+      # deployment.
+      password: ${REDIS_PASSWORD:ms_redis_pass}
+      # Cache calls must fail fast, not hang. Without these, a stopped Redis
+      # left a metrics recompute blocking for ~3 minutes on the connect attempt;
+      # the cache is optional, so a second is already generous.
+      connect-timeout: 1s
+      timeout: 1s
   # SMTP for alert emails. Leave MAIL_HOST unset to disable email delivery entirely
   # (the app still runs; alerts just won't be emailed). See EMAIL_SETUP.md.
   mail:
